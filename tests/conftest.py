@@ -11,6 +11,7 @@ import main
 def _clear_users_table() -> None:
     with main._db_lock:
         main._db_connection.execute("DELETE FROM users")
+        main._db_connection.execute("DELETE FROM refresh_tokens")
         main._db_connection.commit()
 
 
