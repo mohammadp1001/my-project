@@ -47,7 +47,9 @@ def create_access_token(subject: str) -> str:
 
 
 def decode_access_token(token: str) -> str:
-    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    payload = jwt.decode(
+        token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"require": ["sub", "exp"]}
+    )
     return payload["sub"]
 
 
