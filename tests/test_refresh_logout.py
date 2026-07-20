@@ -8,7 +8,7 @@ from main import app
 client = TestClient(app)
 
 
-def _register_and_login(username: str = "alice", password: str = "hunter2") -> dict[str, str]:
+def _register_and_login(username: str = "alice", password: str = "hunter22") -> dict[str, str]:
     client.post("/register", json={"username": username, "password": password})
     response = client.post("/login", json={"username": username, "password": password})
     return response.json()

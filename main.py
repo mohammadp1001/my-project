@@ -1,4 +1,5 @@
 import os
+import re
 import secrets
 import sqlite3
 import threading
@@ -9,7 +10,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 load_dotenv()
 
@@ -181,9 +182,29 @@ def revoke_refresh_token(token: str) -> None:
 # --- API routes module (FastAPI wiring) -----------------------------------
 
 
+# Username/password rules apply only at registration - login is checked
+# against whatever was actually stored, so it must keep accepting
+# credentials that predate a rules change.
+USERNAME_PATTERN = r"^[A-Za-z0-9_-]{3,32}$"
+PASSWORD_MIN_LENGTH = 8
+
+
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    username: str = Field(
+        pattern=USERNAME_PATTERN,
+        description="3-32 characters: letters, digits, underscore, or hyphen",
+    )
+    password: str = Field(
+        min_length=PASSWORD_MIN_LENGTH,
+        description="At least 8 characters, including a letter and a digit",
+    )
+
+    @field_validator("password")
+    @classmethod
+    def _password_has_letter_and_digit(cls, value: str) -> str:
+        if not re.search(r"[A-Za-z]", value) or not re.search(r"\d", value):
+            raise ValueError("password must contain at least one letter and one digit")
+        return value
 
 
 class LoginRequest(BaseModel):

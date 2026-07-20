@@ -28,21 +28,21 @@ def test_create_access_token_uses_hs256():
 
 
 def test_login_with_correct_credentials_returns_token():
-    client.post("/register", json={"username": "alice", "password": "hunter2"})
-    response = client.post("/login", json={"username": "alice", "password": "hunter2"})
+    client.post("/register", json={"username": "alice", "password": "hunter22"})
+    response = client.post("/login", json={"username": "alice", "password": "hunter22"})
     assert response.status_code == 200
     assert "access_token" in response.json()
 
 
 def test_login_with_unknown_username_returns_invalid_credentials():
-    response = client.post("/login", json={"username": "ghost", "password": "hunter2"})
+    response = client.post("/login", json={"username": "ghost", "password": "hunter22"})
     assert response.status_code == 401
     assert response.json() == {"detail": "invalid credentials"}
 
 
 def test_login_with_wrong_password_returns_same_error_as_unknown_username():
-    client.post("/register", json={"username": "alice", "password": "hunter2"})
-    unknown_user_response = client.post("/login", json={"username": "ghost", "password": "hunter2"})
+    client.post("/register", json={"username": "alice", "password": "hunter22"})
+    unknown_user_response = client.post("/login", json={"username": "ghost", "password": "hunter22"})
     wrong_password_response = client.post("/login", json={"username": "alice", "password": "wrong"})
     assert wrong_password_response.status_code == unknown_user_response.status_code
     assert wrong_password_response.json() == unknown_user_response.json()

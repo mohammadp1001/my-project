@@ -9,19 +9,19 @@ client = TestClient(app)
 
 
 def test_register_new_user_succeeds():
-    response = client.post("/register", json={"username": "alice", "password": "hunter2"})
+    response = client.post("/register", json={"username": "alice", "password": "hunter22"})
     assert response.status_code == 201
     assert response.json() == {"username": "alice"}
 
 
 def test_register_duplicate_username_fails():
-    client.post("/register", json={"username": "alice", "password": "hunter2"})
-    response = client.post("/register", json={"username": "alice", "password": "different"})
+    client.post("/register", json={"username": "alice", "password": "hunter22"})
+    response = client.post("/register", json={"username": "alice", "password": "different1"})
     assert response.status_code == 409
 
 
 def test_register_rejects_empty_username():
-    response = client.post("/register", json={"username": "", "password": "hunter2"})
+    response = client.post("/register", json={"username": "", "password": "hunter22"})
     assert response.status_code == 422
 
 
@@ -31,9 +31,9 @@ def test_register_rejects_empty_password():
 
 
 def test_register_response_does_not_leak_password():
-    response = client.post("/register", json={"username": "alice", "password": "hunter2"})
+    response = client.post("/register", json={"username": "alice", "password": "hunter22"})
     assert "password" not in response.json()
-    assert "hunter2" not in response.text
+    assert "hunter22" not in response.text
 
 
 def test_concurrent_registration_of_same_username_only_succeeds_once():
@@ -43,7 +43,7 @@ def test_concurrent_registration_of_same_username_only_succeeds_once():
 
     def attempt() -> None:
         try:
-            register_user(username, "hunter2")
+            register_user(username, "hunter22")
             ok = True
         except UsernameAlreadyRegisteredError:
             ok = False
@@ -58,4 +58,4 @@ def test_concurrent_registration_of_same_username_only_succeeds_once():
 
     assert results.count(True) == 1
     assert results.count(False) == 19
-    assert main.authenticate_user(username, "hunter2")
+    assert main.authenticate_user(username, "hunter22")
