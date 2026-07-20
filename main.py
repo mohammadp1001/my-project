@@ -15,6 +15,13 @@ app = FastAPI(title="Simple Auth Webserver")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY = timedelta(minutes=30)
 
+try:
+    JWT_SECRET = os.environ["JWT_SECRET"]
+except KeyError as exc:
+    raise RuntimeError(
+        "JWT_SECRET environment variable must be set before starting the app"
+    ) from exc
+
 
 # --- Auth/security module -------------------------------------------------
 # Password hashing and JWT issuance. Has no dependency on FastAPI or the
@@ -31,12 +38,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def create_access_token(subject: str) -> str:
-    secret = os.environ["JWT_SECRET"]
     payload = {
         "sub": subject,
         "exp": datetime.now(timezone.utc) + JWT_EXPIRY,
     }
-    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 # --- User store module ------------------------------------------------
