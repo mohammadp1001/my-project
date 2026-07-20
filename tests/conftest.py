@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("JWT_SECRET", "test-secret-do-not-use-in-production")
+
 import pytest
 
 import main
