@@ -1,3 +1,5 @@
+import threading
+
 import bcrypt
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status
@@ -25,6 +27,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # In-memory user store, reset on process restart. No persistence.
 
 _users: dict[str, str] = {}
+_users_lock = threading.Lock()
 
 
 class UsernameAlreadyRegisteredError(Exception):
@@ -32,9 +35,10 @@ class UsernameAlreadyRegisteredError(Exception):
 
 
 def register_user(username: str, password: str) -> None:
-    if username in _users:
-        raise UsernameAlreadyRegisteredError(username)
-    _users[username] = hash_password(password)
+    with _users_lock:
+        if username in _users:
+            raise UsernameAlreadyRegisteredError(username)
+        _users[username] = hash_password(password)
 
 
 def authenticate_user(username: str, password: str) -> bool:
