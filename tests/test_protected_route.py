@@ -47,8 +47,8 @@ def test_decode_access_token_rejects_token_missing_sub_claim():
 
 
 def test_me_with_valid_token_returns_username():
-    client.post("/register", json={"username": "alice", "password": "hunter2"})
-    login_response = client.post("/login", json={"username": "alice", "password": "hunter2"})
+    client.post("/register", json={"username": "alice", "password": "hunter22"})
+    login_response = client.post("/login", json={"username": "alice", "password": "hunter22"})
     token = login_response.json()["access_token"]
 
     response = client.get("/me", headers={"Authorization": f"Bearer {token}"})

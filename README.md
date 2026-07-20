@@ -93,7 +93,7 @@ legitimate user who mistyped their username.
 | Method | Path        | Auth              | Description                                    |
 |--------|-------------|-------------------|--------------------------------------------------|
 | GET    | `/health`   | none              | Liveness check                                  |
-| POST   | `/register` | none              | Create a user (`username`, `password`)          |
+| POST   | `/register` | none              | Create a user (`username`: 3-32 chars, letters/digits/`_`/`-`; `password`: 8+ chars with a letter and a digit) |
 | POST   | `/login`    | none              | Exchange credentials for an access + refresh token |
 | POST   | `/refresh`  | none (body token) | Exchange a valid refresh token for a new access + refresh token (rotates it) |
 | POST   | `/logout`   | none (body token) | Revoke a refresh token                          |
@@ -109,7 +109,12 @@ before either party notices it stopped working.
 
 ## Out of scope
 
-This is intentionally minimal. Not included: password complexity rules,
-rate limiting, and role-based authorization. See the project's tracked
-issues for the full list of
-deliberate omissions.
+This is intentionally minimal. Not included: rate limiting and
+role-based authorization. See the project's tracked issues for the full
+list of deliberate omissions.
+
+Note that the registration rules above apply only at registration time -
+`/login` still accepts any credentials that were valid when the account
+was created, even if the rules change later. Rejecting a login because
+the *current* rules changed, for an account that was valid when it was
+made, would lock out real users over a policy change they had no part in.
