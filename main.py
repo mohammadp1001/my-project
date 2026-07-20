@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -43,6 +44,13 @@ def create_access_token(subject: str) -> str:
         "exp": datetime.now(timezone.utc) + JWT_EXPIRY,
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_access_token(token: str) -> str:
+    payload = jwt.decode(
+        token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"require": ["sub", "exp"]}
+    )
+    return payload["sub"]
 
 
 # --- User store module ------------------------------------------------
@@ -88,6 +96,25 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_username(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> str:
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="invalid or missing token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if credentials is None:
+        raise unauthorized
+    try:
+        return decode_access_token(credentials.credentials)
+    except jwt.InvalidTokenError:
+        raise unauthorized
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -114,3 +141,8 @@ def login(body: LoginRequest) -> TokenResponse:
         )
     token = create_access_token(subject=body.username)
     return TokenResponse(access_token=token)
+
+
+@app.get("/me")
+def me(username: str = Depends(get_current_username)) -> dict[str, str]:
+    return {"username": username}
