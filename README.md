@@ -90,16 +90,26 @@ legitimate user who mistyped their username.
 
 ## API
 
-| Method | Path        | Auth              | Description                          |
-|--------|-------------|-------------------|---------------------------------------|
-| GET    | `/health`   | none              | Liveness check                        |
-| POST   | `/register` | none              | Create a user (`username`, `password`) |
-| POST   | `/login`    | none              | Exchange credentials for a JWT        |
-| GET    | `/me`       | `Bearer <token>`  | Return the authenticated username     |
+| Method | Path        | Auth              | Description                                    |
+|--------|-------------|-------------------|--------------------------------------------------|
+| GET    | `/health`   | none              | Liveness check                                  |
+| POST   | `/register` | none              | Create a user (`username`, `password`)          |
+| POST   | `/login`    | none              | Exchange credentials for an access + refresh token |
+| POST   | `/refresh`  | none (body token) | Exchange a valid refresh token for a new access + refresh token (rotates it) |
+| POST   | `/logout`   | none (body token) | Revoke a refresh token                          |
+| GET    | `/me`       | `Bearer <token>`  | Return the authenticated username               |
+
+Access tokens (JWTs, 30-minute expiry) are used for `/me` via the
+`Authorization: Bearer` header. Refresh tokens (opaque random strings,
+7-day expiry, tracked server-side so they can be revoked) are passed in
+the request body to `/refresh` and `/logout`, and are single-use: each
+successful `/refresh` call issues a new refresh token and invalidates the
+one that was used, so a leaked refresh token can only be reused once
+before either party notices it stopped working.
 
 ## Out of scope
 
-This is intentionally minimal. Not included: persistent storage, refresh
-tokens/logout, password complexity rules, rate limiting, and role-based
-authorization. See the project's tracked issues for the full list of
+This is intentionally minimal. Not included: password complexity rules,
+rate limiting, and role-based authorization. See the project's tracked
+issues for the full list of
 deliberate omissions.

@@ -1,4 +1,5 @@
 import os
+import secrets
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,7 @@ app = FastAPI(title="Simple Auth Webserver")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY = timedelta(minutes=30)
+REFRESH_TOKEN_EXPIRY = timedelta(days=7)
 
 try:
     JWT_SECRET = os.environ["JWT_SECRET"]
@@ -73,6 +75,14 @@ with _db_lock:
         "password_hash TEXT NOT NULL"
         ")"
     )
+    _db_connection.execute(
+        "CREATE TABLE IF NOT EXISTS refresh_tokens ("
+        "token TEXT PRIMARY KEY, "
+        "username TEXT NOT NULL, "
+        "expires_at TEXT NOT NULL, "
+        "revoked INTEGER NOT NULL DEFAULT 0"
+        ")"
+    )
     _db_connection.commit()
 
 
@@ -103,6 +113,71 @@ def authenticate_user(username: str, password: str) -> bool:
     return verify_password(password, row[0])
 
 
+# --- Refresh token module --------------------------------------------------
+# Unlike the access token, a refresh token is not a JWT - it's an opaque
+# random string the server tracks server-side (username, expiry, revoked).
+# That's what makes revocation possible at all: a stateless JWT can never
+# be revoked before its own expiry, which would defeat the point of
+# /logout. Longer-lived than the access token, but still expires.
+
+
+class InvalidRefreshTokenError(Exception):
+    pass
+
+
+def create_refresh_token(username: str) -> str:
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + REFRESH_TOKEN_EXPIRY
+    with _db_lock:
+        _db_connection.execute(
+            "INSERT INTO refresh_tokens (token, username, expires_at, revoked) "
+            "VALUES (?, ?, ?, 0)",
+            (token, username, expires_at.isoformat()),
+        )
+        _db_connection.commit()
+    return token
+
+
+def rotate_refresh_token(token: str) -> tuple[str, str]:
+    """Validate `token`, revoke it, and issue a replacement.
+
+    Returns (new_refresh_token, username). Rotating on every use limits
+    the blast radius of a leaked refresh token: it's single-use, so a
+    subsequent use of the old value (by either party) is now detectable.
+    """
+    with _db_lock:
+        row = _db_connection.execute(
+            "SELECT username, expires_at, revoked FROM refresh_tokens WHERE token = ?",
+            (token,),
+        ).fetchone()
+        if row is None:
+            raise InvalidRefreshTokenError(token)
+        username, expires_at_str, revoked = row
+        if revoked or datetime.fromisoformat(expires_at_str) < datetime.now(timezone.utc):
+            raise InvalidRefreshTokenError(token)
+
+        _db_connection.execute(
+            "UPDATE refresh_tokens SET revoked = 1 WHERE token = ?", (token,)
+        )
+        new_token = secrets.token_urlsafe(32)
+        new_expires_at = datetime.now(timezone.utc) + REFRESH_TOKEN_EXPIRY
+        _db_connection.execute(
+            "INSERT INTO refresh_tokens (token, username, expires_at, revoked) "
+            "VALUES (?, ?, ?, 0)",
+            (new_token, username, new_expires_at.isoformat()),
+        )
+        _db_connection.commit()
+    return new_token, username
+
+
+def revoke_refresh_token(token: str) -> None:
+    with _db_lock:
+        _db_connection.execute(
+            "UPDATE refresh_tokens SET revoked = 1 WHERE token = ?", (token,)
+        )
+        _db_connection.commit()
+
+
 # --- API routes module (FastAPI wiring) -----------------------------------
 
 
@@ -118,7 +193,16 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str = Field(min_length=1)
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -164,8 +248,27 @@ def login(body: LoginRequest) -> TokenResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid credentials",
         )
-    token = create_access_token(subject=body.username)
-    return TokenResponse(access_token=token)
+    access_token = create_access_token(subject=body.username)
+    refresh_token = create_refresh_token(body.username)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@app.post("/refresh", response_model=TokenResponse)
+def refresh(body: RefreshRequest) -> TokenResponse:
+    try:
+        new_refresh_token, username = rotate_refresh_token(body.refresh_token)
+    except InvalidRefreshTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or expired refresh token",
+        )
+    access_token = create_access_token(subject=username)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
+
+
+@app.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(body: LogoutRequest) -> None:
+    revoke_refresh_token(body.refresh_token)
 
 
 @app.get("/me")
