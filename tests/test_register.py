@@ -58,4 +58,4 @@ def test_concurrent_registration_of_same_username_only_succeeds_once():
 
     assert results.count(True) == 1
     assert results.count(False) == 19
-    assert main._users[username] is not None
+    assert main.authenticate_user(username, "hunter2")

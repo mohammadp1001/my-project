@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 
@@ -54,10 +55,25 @@ def decode_access_token(token: str) -> str:
 
 
 # --- User store module ------------------------------------------------
-# In-memory user store, reset on process restart. No persistence.
+# SQLite-backed user store. A single connection is opened once for the
+# process lifetime (required for DATABASE_PATH=":memory:" to actually
+# persist across calls - a fresh connection per call would each get its
+# own empty in-memory database). sqlite3.Connection objects aren't safe
+# for concurrent use from multiple threads even with
+# check_same_thread=False, so all access goes through _db_lock.
 
-_users: dict[str, str] = {}
-_users_lock = threading.Lock()
+DATABASE_PATH = os.environ.get("DATABASE_PATH", "./data.db")
+
+_db_lock = threading.Lock()
+_db_connection = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+with _db_lock:
+    _db_connection.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "username TEXT PRIMARY KEY, "
+        "password_hash TEXT NOT NULL"
+        ")"
+    )
+    _db_connection.commit()
 
 
 class UsernameAlreadyRegisteredError(Exception):
@@ -65,17 +81,26 @@ class UsernameAlreadyRegisteredError(Exception):
 
 
 def register_user(username: str, password: str) -> None:
-    with _users_lock:
-        if username in _users:
+    password_hash = hash_password(password)
+    with _db_lock:
+        try:
+            _db_connection.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, password_hash),
+            )
+            _db_connection.commit()
+        except sqlite3.IntegrityError:
             raise UsernameAlreadyRegisteredError(username)
-        _users[username] = hash_password(password)
 
 
 def authenticate_user(username: str, password: str) -> bool:
-    hashed = _users.get(username)
-    if hashed is None:
+    with _db_lock:
+        row = _db_connection.execute(
+            "SELECT password_hash FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    if row is None:
         return False
-    return verify_password(password, hashed)
+    return verify_password(password, row[0])
 
 
 # --- API routes module (FastAPI wiring) -----------------------------------
