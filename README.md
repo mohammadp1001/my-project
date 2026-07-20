@@ -2,9 +2,9 @@
 
 A small FastAPI server that implements JWT-based authentication from
 scratch, built as a learning project. It favors clarity over production
-hardening: an in-memory user store, no password complexity rules, and a
-single access token with no refresh flow. The goal is to see exactly how
-each piece of "auth" works, not to hide it behind a library.
+hardening: no password complexity rules, and a single access token with
+no refresh flow. The goal is to see exactly how each piece of "auth"
+works, not to hide it behind a library.
 
 ## Setup
 
@@ -15,6 +15,11 @@ uv sync
 cp .env.example .env
 # edit .env and set JWT_SECRET to a long random value
 ```
+
+Users are stored in a SQLite database, whose file path is controlled by
+`DATABASE_PATH` (see `.env.example`; defaults to `./data.db` if unset).
+The database file is created automatically on first run and is
+gitignored - delete it if you want to start from a clean slate.
 
 ## Running
 
